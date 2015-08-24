@@ -56,10 +56,18 @@ tC1 <- userTotals %>%
   arrange(totalProgress)
 
 
-# plot
-c <- ggplot(tC1, aes(x=reorder(user,totalProgress), y=totalProgress, fill=status))
-c + geom_bar(stat="identity") + coord_flip() + scale_fill_manual(values=colorPalette) + ylab("Total Progress to Date") + xlab("Username")
+# bar plot
+classPlot <- function(dfClass) {
+  plot <- ggplot(dfClass, aes(x=reorder(user,totalProgress), y=totalProgress, fill=status))
+  plot <- plot + geom_bar(stat="identity") + coord_flip() + scale_fill_manual(values=colorPalette) + ylab("Total Progress to Date") + xlab("Username")
+  return(plot)
+}
 
+adminPlot <- function(dfAllUsers) {
+  plot <- ggplot(dfAllUsers, aes(x=reorder(user,totalProgress), y=totalProgress, fill=status))
+  plot <- plot + geom_bar(stat="identity") + coord_flip() + scale_fill_manual(values=colorPalette) + ylab("Total Progress to Date") + xlab("Username")
+  return(plot)
+}
 
-
-
+classPlot(tC1)
+adminPlot(userTotals)
