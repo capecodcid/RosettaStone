@@ -4,7 +4,6 @@
 # LOAD LIBRARIES
 library(ggplot2)
 library(dplyr)
-library(data.table)
 
 # LOAD CSV FILE and Define classes
 spreadsheet1  = read.csv('/Users/andrewhartnett/Downloads/UsageReport-Class of 2022 (3).csv')
@@ -24,8 +23,8 @@ epstein10 = c("ajuhanm002","cardenask152","chavezs134","dasilvac180","figueroae0
 sinha9 = c("cheayee145", "cruzd123", "cruzy099", "echavarriav030", "geogheganc039", "gravierv133", "nunezn065", "peckhama143", "ramosa131", "silvierae076", "vazdopios192")
 sinha10 = c("adebayof172", "bayronriveral012", "granilloc155", "leporea054", "marroquinl060", "moralesp168", "rogersr171", "sosar166")
 
-olivo9 = c("antiguaa087", "batistal151", "dufaultj029", "dwyern083", "godoyy098", "mouratob071", "silva-milersona088", "trejor144", "vieirah096", "wilsonm100")
-olivo10 = c("arboledaj004", "ariasl007", "bravog078", "cassianik020", "encarnaciona179", "feldb033", "gallegosgomezm139", "lopesn057", "ricaurteg115", "tebaldih170", "trejoa092", "vasquezj175")
+olivo9 = c("antiguaa087", "batistal151", "dufaultj029", "dwyern083", "godoyy098", "mouratob071", "silva-milersona088", "trejor144", "vieirah096", "wilsonm100", "encarnaciona179")
+olivo10 = c("arboledaj004", "ariasl007", "bravog078", "cassianik020", "feldb033", "gallegosgomezm139", "lopesn057", "ricaurteg115", "tebaldih170", "trejoa092", "vasquezj175")
 
 delanos9 = c("gomezn044", "chavezk023", "moored137", "ayalab008", "riganom071", "kinnesl057", "jadachp047", "girardt043","lemuso118", "restrepoa070")
 delanos10 = c("colonias109", "zabb174", "adotevim150", "zuluagas102", "velezm124", "adelekeo001", "aguilarb103", "gomese173", "tavaresa165","youngs100","vazquezl108")
@@ -59,6 +58,17 @@ strikingDist = 20;
 #
 
 colorPalette = c('#0000FF','#3FDB35','#FFED1B','#FF1605')
+
+substrRight <- function(x, n){
+  substr(x, nchar(x)-n+1, nchar(x))
+}
+
+getID <- function(username, class){
+  nameStem <- unlist(strsplit(as.character(username),'_'))
+  idNumber <- substrRight(nameStem[1],3)
+  id <- paste(class,idNumber, sep = "")
+  return(id)
+}
 
 getStatus <- function(progress, grade) {
   status <- "danger"
@@ -132,8 +142,9 @@ findClass <- function(usr) {
 # keeping username, language, % completion, hours
 # set up correct names and make sure all columns are the correct class
 dat1 = spreadsheet1[2:nrow(spreadsheet1),c(3,6,10,12)]
+dat1$class = '22'
 dat2 = spreadsheet2[2:nrow(spreadsheet2),c(3,6,10,12)]
-
+dat2$class = '23' 
 
 # special cases
 # "PhillipsD177"
@@ -157,12 +168,13 @@ dat$grade<-as.factor(dat$grade)
 
 
 # Group By user and calculate total progress and time spent
-byUser <- group_by(dat, user, grade)
+byUser <- group_by(dat, user, grade, class)
 userTotals<-summarise(byUser,totalProgress=sum(percent), totalTime=sum(hours)) 
 
 for (cnt in 1:dim(userTotals)[1]) {
   #userTotals$grade[cnt] <- findGrade(userTotals$user[cnt])
   userTotals$proctor[cnt] <- findClass(userTotals$user[cnt])
+  userTotals$id[cnt] <- getID(userTotals$user[cnt], userTotals$class[cnt])
   #userTotals$status[cnt] <- getStatus(userTotals$totalProgress[cnt], userTotals$grade[cnt])
 }
 userTotals$proctor <- as.factor(userTotals$proctor)
@@ -174,24 +186,32 @@ userTotals$status= factor(userTotals$status, levels=c("complete","okay","warning
 
 
 testPlot <- function(dfClass, expect9, expect10, grade9Goal, grade10Goal) {
-  plot <- ggplot(dfClass, aes(x=reorder(user,progress), y=progress, fill=status))
-  plot <- plot + ggtitle(first(dfClass$proctor)) + geom_bar(stat="identity") + coord_flip() +
+  rsplot <- ggplot(dfClass, aes(x=reorder(user,progress), y=progress, fill=status))
+  rsplot <- rsplot + ggtitle(first(dfClass$proctor)) + geom_bar(stat="identity") + coord_flip() +
     scale_fill_manual(values=colorPalette,limits = levels(dfClass$status)) + 
     ylab("Total Progress to Date") + xlab("Username")
     
   
-  if (first(dfClass$grade) == 9){
-    plot <- plot + ylim(0,grade9Goal) + coord_flip() + geom_hline(aes(yintercept=expect9)) 
-    #+ geom_text(aes(label = totalProgress, y = 250), size = 7, hjust=1)
-  }
-  if (first(dfClass$grade)==10){
-    plot <- plot + ylim(0,grade10Goal) + coord_flip() + geom_hline(aes(yintercept=expect10)) 
-    #+ geom_text(aes(label = totalProgress, y = 500), size = 7, hjust=1)
-  }
+   if (first(dfClass$grade) == 9){
+     rsplot <- rsplot + ylim(0,grade9Goal) + coord_flip() + geom_hline(aes(yintercept=expect9)) 
+     #+ geom_text(aes(label = totalProgress, y = 250), size = 7, hjust=1)
+   }
+   if (first(dfClass$grade)==10){
+     rsplot <- rsplot + ylim(0,grade10Goal) + coord_flip() + geom_hline(aes(yintercept=expect10)) 
+     #+ geom_text(aes(label = totalProgress, y = 500), size = 7, hjust=1)
+   }
   fileName = paste0(first(dfClass$proctor),'_',first(dfClass$grade),'_week_',currentWeek,'.pdf');
-  ggsave(filename = fileName, plot = plot, width = 7, height = 5)
-  #print(plot)
+  ggsave(filename = fileName, plot = rsplot, width = 7, height = 5)
+  #print(rsplot)
 }
 group_by(userTotals, proctor, grade) %>%
-  do(plot = testPlot(.,expect9, expect10, grade9Goal, grade10Goal))
+  do(rsplot = testPlot(.,expect9, expect10, grade9Goal, grade10Goal))
 
+
+#toCSV <- userTotals %>% filter(grade!='0') %>% select(user, id, status) %>% arrange(id, user) %>% rowwise() %>% mutate(onTrack = 1*(status !="danger"))
+#write.csv(toCSV, file = "test.csv")
+
+
+tmp <- userTotals %>% filter(grade==10)
+
+write.csv(tmp, file = "10thGrade.csv")

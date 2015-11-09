@@ -1,22 +1,21 @@
-###
-# USER NEEDS TO SET VALUES IN LINES 
-###
-# LOAD LIBRARIES
+library(shiny)
 library(ggplot2)
 library(dplyr)
-library(data.table)
 
-# LOAD CSV FILE and Define classes
-spreadsheet1  = read.csv('/Users/andrewhartnett/Downloads/UsageReport-Class of 2022 (3).csv')
-spreadsheet2  = read.csv('/Users/andrewhartnett/Downloads/UsageReport-Class of 2023 (3).csv')
-currentWeek = 10;
+constants = list(strikingDist = 20,
+                 grade9Goal = 250,
+                 grade10Goal = 500,
+                 weeksPerYear = 38)
 
+strikingDist = 20
+grade9Goal = 250
+grade10Goal = 500
+weeksPerYear = 38
 
-grade9Goal = 250;
-grade10Goal = 500;
-weeksPerYear = 38;
+expect9 <- NULL
+expect10 <- NULL
 
-
+colorPalette = c('#0000FF','#3FDB35','#FFED1B','#FF1605')
 
 epstein9 = c("cadenahernandezm046","brisbonl017","mageea058","dekreonz027","padillay066","laboye093","sotoo077","wojcika134","sernad086","johnsonk053","gomesc043","murphyz086")
 epstein10 = c("ajuhanm002","cardenask152","chavezs134","dasilvac180","figueroae035","ortiz-muriels142","lombak156","riverae083","maybink133","hindsc050")
@@ -49,36 +48,37 @@ classes9 = list(epstein=epstein9,sinha=sinha9,olivo=olivo9,delanos=delanos9,cara
 classes10 = list(epstein=epstein10,sinha=sinha10,olivo=olivo10,delanos=delanos10,caraza=caraza10,rupani=rupani10,allcock=allcock10,gibson=gibson10,payette=payette10)
 
 
-expect9 = currentWeek*(grade9Goal/weeksPerYear);
-expect10 = currentWeek*((grade10Goal-200)/weeksPerYear)+200;
 
-strikingDist = 20;
+substrRight <- function(x, n){
+  substr(x, nchar(x)-n+1, nchar(x))
+}
 
-#
-# Definitions of Functions and Styles
-#
+getID <- function(username, class){
+  nameStem <- unlist(strsplit(as.character(username),'_'))
+  idNumber <- substrRight(nameStem[1],3)
+  id <- paste(class,idNumber, sep = "")
+  return(id)
+}
 
-colorPalette = c('#0000FF','#3FDB35','#FFED1B','#FF1605')
-
-getStatus <- function(progress, grade) {
+getStatus <- function(progress, grade, constants) {
   status <- "danger"
   if (grade==9){
-    if (progress >= grade9Goal) {
+    if (progress >= constants$grade9Goal) {
       status <- "complete"
     } else if (progress >= expect9) {
       status <- "okay"
-    } else if (progress >= expect9-strikingDist) {
+    } else if (progress >= expect9-constants$strikingDist) {
       status <- "warning"
     } else {
       status <- "danger"
     }
   }
   else if (grade==10){
-    if (progress >= grade10Goal) {
+    if (progress >= constants$grade10Goal) {
       status <- "complete"
     } else if (progress >= expect10) {
       status <- "okay"
-    } else if (progress >= expect10-strikingDist) {
+    } else if (progress >= expect10-constants$strikingDist) {
       status <- "warning"
     } else {
       status <- "danger"
@@ -87,30 +87,14 @@ getStatus <- function(progress, grade) {
   return(status)
 }
 
-displayProgress <- function(progress, grade) {
+displayProgress <- function(progress, grade, constants) {
   if (grade==9){
-    return(min(progress,grade9Goal))
+    return(min(progress,constants$grade9Goal))
   } else if (grade==10){
-    return(min(progress,grade10Goal))
+    return(min(progress,constants$grade10Goal))
   } else {
     return(progress)
   }
-}
-
-
-findGrade <- function(usr) {
-  usr = as.character(usr)
-  usr = tolower(usr)
-  for (cl in names(classes10)){
-    print
-    if (tolower(usr) %in% classes10[[cl]]) {
-      return('10')
-    }
-    else if (tolower(usr) %in% classes9[[cl]]) {
-      return('9')
-    }
-  }
-  return('0')
 }
 
 findClass <- function(usr) {
@@ -128,70 +112,92 @@ findClass <- function(usr) {
   return('NoClass')
 }
 
-# REMOVE FIRST ROW AND ALL UNNEEDED COLUMNS
-# keeping username, language, % completion, hours
-# set up correct names and make sure all columns are the correct class
-dat1 = spreadsheet1[2:nrow(spreadsheet1),c(3,6,10,12)]
-dat2 = spreadsheet2[2:nrow(spreadsheet2),c(3,6,10,12)]
-
-
-# special cases
-# "PhillipsD177"
-#for (names in dat1$)
-
-dat <- rbind(dat1, dat2)
-dat<-rename(dat,user=X.1)
-dat<-rename(dat,lang=X.4)
-dat<-rename(dat,percent=X.8)
-dat$percent <- as.numeric(as.character(dat$percent))
-dat<-rename(dat,hours=X.10)
-dat$hours<-as.numeric(as.character(dat$hours))
-rownames(dat)<-1:nrow(dat)
-
-for (cnt in 1:dim(dat)[1]) {
-  dat$grade[cnt] <- findGrade(dat$user[cnt])
+findGrade <- function(usr) {
+  usr = as.character(usr)
+  usr = tolower(usr)
+  for (cl in names(classes10)){
+    print
+    if (tolower(usr) %in% classes10[[cl]]) {
+      return('10')
+    }
+    else if (tolower(usr) %in% classes9[[cl]]) {
+      return('9')
+    }
+  }
+  return('0')
 }
 
 
-dat$grade<-as.factor(dat$grade)
-
-
-# Group By user and calculate total progress and time spent
-byUser <- group_by(dat, user, grade)
-userTotals<-summarise(byUser,totalProgress=sum(percent), totalTime=sum(hours)) 
-
-for (cnt in 1:dim(userTotals)[1]) {
-  #userTotals$grade[cnt] <- findGrade(userTotals$user[cnt])
-  userTotals$proctor[cnt] <- findClass(userTotals$user[cnt])
-  #userTotals$status[cnt] <- getStatus(userTotals$totalProgress[cnt], userTotals$grade[cnt])
-}
-userTotals$proctor <- as.factor(userTotals$proctor)
-
-
-userTotals = userTotals %>% rowwise() %>% mutate(status = getStatus(totalProgress,grade), progress = displayProgress(totalProgress,grade))
-userTotals$status= factor(userTotals$status, levels=c("complete","okay","warning","danger"))
-
-
-
-testPlot <- function(dfClass, expect9, expect10, grade9Goal, grade10Goal) {
-  plot <- ggplot(dfClass, aes(x=reorder(user,progress), y=progress, fill=status))
-  plot <- plot + ggtitle(first(dfClass$proctor)) + geom_bar(stat="identity") + coord_flip() +
-    scale_fill_manual(values=colorPalette,limits = levels(dfClass$status)) + 
-    ylab("Total Progress to Date") + xlab("Username")
+loadData <- function(file1, file2){
+  if(is.null(file1) || is.null(file2)){
+    return(NULL)
+  } else {
+    spreadsheet1 = read.csv(file1$datapath)
+    spreadsheet2 = read.csv(file2$datapath)
     
-  
-  if (first(dfClass$grade) == 9){
-    plot <- plot + ylim(0,grade9Goal) + coord_flip() + geom_hline(aes(yintercept=expect9)) 
-    #+ geom_text(aes(label = totalProgress, y = 250), size = 7, hjust=1)
+    dat1 = spreadsheet1[2:nrow(spreadsheet1),c(3,6,10,12)]
+    dat1$class = '22'
+    dat2 = spreadsheet2[2:nrow(spreadsheet2),c(3,6,10,12)]
+    dat2$class = '23'
+    
+    dat <- rbind(dat1, dat2)
+    dat<-rename(dat,user=X.1)
+    dat<-rename(dat,lang=X.4)
+    dat<-rename(dat,percent=X.8)
+    dat$percent <- as.numeric(as.character(dat$percent))
+    dat<-rename(dat,hours=X.10)
+    dat$hours<-as.numeric(as.character(dat$hours))
+    rownames(dat)<-1:nrow(dat)
+    
+    for (cnt in 1:dim(dat)[1]) {
+      dat$grade[cnt] <- findGrade(dat$user[cnt])
+    }
+    dat$grade<-as.factor(dat$grade)
+    
+    return(dat)
   }
-  if (first(dfClass$grade)==10){
-    plot <- plot + ylim(0,grade10Goal) + coord_flip() + geom_hline(aes(yintercept=expect10)) 
-    #+ geom_text(aes(label = totalProgress, y = 500), size = 7, hjust=1)
-  }
-  fileName = paste0(first(dfClass$proctor),'_',first(dfClass$grade),'_week_',currentWeek,'.pdf');
-  ggsave(filename = fileName, plot = plot, width = 7, height = 5)
-  #print(plot)
 }
-group_by(userTotals, proctor, grade) %>%
-  do(plot = testPlot(.,expect9, expect10, grade9Goal, grade10Goal))
+
+generatePlot2 <- function(data, currentWeek, teacher, effectiveGrade, constants){
+  if(is.null(data)){
+    return(NULL)
+  } else {
+  expect9 <<- currentWeek*(constants$grade9Goal/constants$weeksPerYear);
+  expect10 <<- currentWeek*((constants$grade10Goal-200)/constants$weeksPerYear)+200;
+  
+  cat(currentWeek)
+  cat("\n")
+  cat(expect9)
+  cat("\n")
+  
+  byUser <- dplyr::group_by(data, user, grade, class)
+  userTotals<-dplyr::summarise(byUser,totalProgress=sum(percent), totalTime=sum(hours)) 
+  
+  for (cnt in 1:dim(userTotals)[1]) {
+    userTotals$proctor[cnt] <- findClass(userTotals$user[cnt])
+    userTotals$id[cnt] <- getID(userTotals$user[cnt], userTotals$class[cnt])
+  }
+  userTotals$proctor <- as.factor(userTotals$proctor)
+  
+  
+  userTotals = userTotals %>% dplyr::rowwise() %>% dplyr::mutate(status = getStatus(totalProgress,grade, constants), progress = displayProgress(totalProgress,grade, constants))
+  userTotals$status= factor(userTotals$status, levels=c("complete","okay","warning","danger"))
+  
+  tmp <- userTotals %>% 
+    dplyr::filter(proctor == teacher, grade == effectiveGrade)
+  
+  plot <- ggplot(tmp, aes(x=reorder(user,progress), y=progress, fill=status))
+  plot <- plot + ggtitle(first(tmp$proctor)) + geom_bar(stat="identity") + coord_flip() +
+    scale_fill_manual(values=colorPalette,limits = levels(tmp$status)) + 
+    ylab("Total Progress to Date") + xlab("Username")
+  
+  if (first(tmp$grade) == 9){
+    plot <- plot + ylim(0, constants$grade9Goal) + coord_flip() + geom_hline(aes(yintercept=expect9)) 
+  }
+  if (first(tmp$grade)==10){
+    plot <- plot + ylim(0,constants$grade10Goal) + coord_flip() + geom_hline(aes(yintercept=expect10)) 
+  }
+  return(plot)
+  }
+}
 
